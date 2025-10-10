@@ -12,7 +12,57 @@
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
+        <svg id="backgroundSVG" style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+            <defs>
+                <radialGradient id="skyRadial" cx="50%" cy="50%" r="70%">
+                    <stop offset="0%" style="stop-color:#87ceeb;stop-opacity:1" />
+                    <stop offset="70%" style="stop-color:#4a90e2;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#1a1a3e;stop-opacity:1" />
+                </radialGradient>
+                
+                <!-- Cloud pattern -->
+                <filter id="blur">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" />
+                </filter>
+            </defs>
+            
+            <!-- Radial sky (falling perspective) -->
+            <rect width="100%" height="100%" fill="url(#skyRadial)"/>
+            
+            <!-- Stars scattered (view from below) -->
+            <circle cx="15%" cy="20%" r="2" fill="white" opacity="0.8"/>
+            <circle cx="30%" cy="35%" r="1.5" fill="white" opacity="0.6"/>
+            <circle cx="45%" cy="15%" r="2.5" fill="white" opacity="0.9"/>
+            <circle cx="55%" cy="60%" r="1" fill="white" opacity="0.5"/>
+            <circle cx="70%" cy="25%" r="2" fill="white" opacity="0.7"/>
+            <circle cx="80%" cy="45%" r="1.5" fill="white" opacity="0.6"/>
+            <circle cx="85%" cy="70%" r="2" fill="white" opacity="0.8"/>
+            <circle cx="20%" cy="75%" r="1.5" fill="white" opacity="0.6"/>
+            <circle cx="90%" cy="15%" r="2" fill="white" opacity="0.7"/>
+            <circle cx="40%" cy="80%" r="1" fill="white" opacity="0.5"/>
+            <circle cx="65%" cy="40%" r="2.5" fill="white" opacity="0.8"/>
+            
+            <!-- Clouds (perspective - larger = closer) -->
+            <g filter="url(#blur)">
+                <ellipse cx="25%" cy="70%" rx="150" ry="50" fill="white" opacity="0.2"/>
+                <ellipse cx="75%" cy="30%" rx="120" ry="40" fill="white" opacity="0.15"/>
+                <ellipse cx="50%" cy="50%" rx="100" ry="35" fill="white" opacity="0.18"/>
+                <ellipse cx="10%" cy="40%" rx="90" ry="30" fill="white" opacity="0.15"/>
+                <ellipse cx="85%" cy="75%" rx="110" ry="35" fill="white" opacity="0.2"/>
+            </g>
+            
+            <!-- Depth lines (falling effect) -->
+            <line x1="50%" y1="50%" x2="0%" y2="0%" stroke="white" stroke-width="0.5" opacity="0.1"/>
+            <line x1="50%" y1="50%" x2="100%" y2="0%" stroke="white" stroke-width="0.5" opacity="0.1"/>
+            <line x1="50%" y1="50%" x2="0%" y2="100%" stroke="white" stroke-width="0.5" opacity="0.1"/>
+            <line x1="50%" y1="50%" x2="100%" y2="100%" stroke="white" stroke-width="0.5" opacity="0.1"/>
+        </svg>
+        
+        <canvas id="gameCanvas" style="position: relative; z-index: 2;"></canvas>
+        <div id="gameZone"></div>
+        <div id="ballCoords" style="position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; z-index: 10;">
+            BALL: X=0.00 Y=0.00 Z=0.00
+        </div>
     </div>
     
     <script src="js/game3d-simple.js"></script>
