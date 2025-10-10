@@ -15,6 +15,8 @@ class Game3DSimple {
         
         // Game state
         this.obstacles = [];
+        this.tunnelSegments = []; // Store tunnel segments for movement
+        this.speed = 0.05; // Speed of tunnel movement
         
         this.init();
     }
@@ -81,6 +83,14 @@ class Game3DSimple {
             ring.rotation.x = Math.PI / 2;
             this.scene.add(ring);
             
+            // Store segment for movement
+            this.tunnelSegments.push({
+                mesh: ring,
+                originalDepth: depth,
+                scale: scale,
+                radius: radius
+            });
+            
             // Add texture details to each ring
             for (let j = 0; j < 8; j++) {
                 const angle = (j * Math.PI * 2) / 8;
@@ -98,6 +108,14 @@ class Game3DSimple {
                 detail.rotation.z = angle;
                 
                 this.scene.add(detail);
+                
+                // Store detail for movement too
+                this.tunnelSegments.push({
+                    mesh: detail,
+                    originalDepth: depth,
+                    scale: scale,
+                    radius: radius
+                });
             }
         }
         
@@ -116,6 +134,14 @@ class Game3DSimple {
         target.position.set(0, 0, -40);
         target.rotation.x = Math.PI / 2;
         this.scene.add(target);
+        
+        // Store target for movement
+        this.tunnelSegments.push({
+            mesh: target,
+            originalDepth: 40,
+            scale: 1,
+            radius: 0.2
+        });
         
         console.log('Tunnel with perspective created!');
     }
@@ -161,6 +187,9 @@ class Game3DSimple {
         // Update player movement
         this.updatePlayer();
         
+        // Update tunnel movement (decor moves towards player)
+        this.updateTunnel();
+        
         this.render();
         requestAnimationFrame(() => this.gameLoop());
     }
@@ -191,6 +220,23 @@ class Game3DSimple {
         // Slight rotation for visual feedback
         this.player.rotation.x += 0.01;
         this.player.rotation.y += 0.01;
+    }
+    
+    updateTunnel() {
+        // Move tunnel segments towards player (create falling effect)
+        this.tunnelSegments.forEach(segment => {
+            // Move segment towards player
+            segment.mesh.position.z += this.speed;
+            
+            // When segment passes player, reset it to the back
+            if (segment.mesh.position.z > 5) {
+                segment.mesh.position.z = -40; // Reset to back
+            }
+        });
+        
+        // Gradually increase speed for more intense falling effect
+        this.speed += 0.0001;
+        this.speed = Math.min(this.speed, 0.2); // Cap max speed
     }
     
 }
