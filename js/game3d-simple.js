@@ -77,14 +77,14 @@ class Game3DSimple {
         this.scene.add(sky);
         */
         
-        // 2. Camera
+        // 2. Camera (optimized for mobile portrait)
         this.camera = new THREE.PerspectiveCamera(
-            50, // FOV (reduced from 75 for more zoom)
+            45, // FOV (tighter for mobile)
             window.innerWidth / window.innerHeight, // Aspect ratio
             0.1, // Near
             1000 // Far
         );
-        this.camera.position.set(0, 10, 0); // Camera even closer (more zoom)
+        this.camera.position.set(0, 8, 0); // Closer for mobile (8 instead of 10)
         this.camera.lookAt(0, 0, 0); // Look down at player
         
         // 3. Renderer
@@ -310,10 +310,10 @@ class Game3DSimple {
         });
         
         const corners = [
-            { x: -5, z: -6 },  // Top-left
-            { x: 5, z: -6 },   // Top-right
-            { x: -5, z: 6 },   // Bottom-left
-            { x: 5, z: 6 }     // Bottom-right
+            { x: -3, z: -5 },  // Top-left
+            { x: 3, z: -5 },   // Top-right
+            { x: -3, z: 5 },   // Bottom-left
+            { x: 3, z: 5 }     // Bottom-right
         ];
         
         corners.forEach(pos => {
@@ -408,9 +408,9 @@ class Game3DSimple {
         // Ball falls down
         this.player.position.y -= this.fallSpeed;
         
-        // Keep player in bounds (smaller area for better gameplay)
-        const maxX = 5; // Narrower width
-        const maxZ = 6; // Narrower height
+        // Keep player in bounds (mobile-optimized area)
+        const maxX = 3; // Narrower width for mobile
+        const maxZ = 5; // Taller height for portrait mode
         this.player.position.x = Math.max(-maxX, Math.min(maxX, this.player.position.x));
         this.player.position.z = Math.max(-maxZ, Math.min(maxZ, this.player.position.z));
         
@@ -420,11 +420,11 @@ class Game3DSimple {
     }
     
     updateCamera() {
-        // Camera follows player from above (aerial view)
-        this.camera.position.x = this.player.position.x;
-        this.camera.position.y = this.player.position.y + 10; // 10 units above player (even closer zoom)
-        this.camera.position.z = this.player.position.z;
-        this.camera.lookAt(this.player.position);
+        // Camera FOLLOWS player (mobile optimized)
+        this.camera.position.x = this.player.position.x; // Follow X
+        this.camera.position.y = this.player.position.y + 8; // 8 units above player (closer for mobile)
+        this.camera.position.z = this.player.position.z; // Follow Z
+        this.camera.lookAt(this.player.position); // Always look at player
     }
     
     updateLandscape() {
@@ -516,9 +516,9 @@ class Game3DSimple {
         // Random size (smaller platforms)
         const randomScale = 0.5 + Math.random() * 0.8; // Scale between 0.5 and 1.3 (smaller)
         
-        // Random position across entire play area (TRULY random)
-        const randomX = Math.random() * 10 - 5; // -5 to +5 (ensures full range)
-        const randomZ = Math.random() * 12 - 6; // -6 to +6 (ensures full range)
+        // Random position in WIDER area (mobile portrait optimized)
+        const randomX = Math.random() * 10 - 5; // -5 to +5 (wider than playable -3 to +3)
+        const randomZ = Math.random() * 14 - 7; // -7 to +7 (wider than playable -5 to +5)
         
         obstacle.position.set(
             randomX, // Random X across full width
