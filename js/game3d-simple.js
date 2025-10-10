@@ -13,22 +13,40 @@ class Game3DSimple {
         // Input
         this.keys = {};
         
+        // Touch controls
+        this.touchStartX = 0;
+        this.touchStartY = 0;
+        this.touchStartTime = 0;
+        this.isSwiping = false;
+        
         // Game state
         this.obstacles = [];
+        this.powerUps = []; // Store power-ups separately
         this.tunnelSegments = []; // Store tunnel segments for movement
         this.speed = 0.005; // Speed of tunnel movement
         this.startTime = null; // Start time for fall duration
         this.maxFallSeconds = 30; // Stop after 30s
         this.landscapeElements = []; // Store landscape elements for subtle movement
-        this.obstacles = []; // Store obstacles
-        this.fallSpeed = 0.05; // Speed of obstacles moving up (slow)
+        this.fallSpeed = 0.05; // Speed of obstacles moving up (Start at old level 3 speed)
         this.tunnelActive = true; // Keep tunnel active
         this.obstaclesInTunnel = true; // Spawn obstacles in tunnel
         
         // Game state
         this.gameOver = false;
+        this.isPaused = false;
         this.score = 0;
         this.bestScore = localStorage.getItem('bestScore') || 0;
+        
+        // Power-up state
+        this.activePowerUp = null; // Currently active power-up
+        this.powerUpEndTime = 0; // When current power-up expires
+        
+        // Difficulty progression (Amateur: 1min30, Pro: 4-5min)
+        this.baseSpawnRate = 0.05; // Base spawn rate (Level 1 = old Level 3)
+        this.currentSpawnRate = 0.05; // Current spawn rate (increases over time)
+        this.baseFallSpeed = 0.05; // Base fall speed (Level 1 = old Level 3)
+        this.difficultyIncreaseInterval = 15000; // Increase difficulty every 15 seconds (amateur: 1min30, pro: 4-5min)
+        this.lastDifficultyIncrease = Date.now();
         
         this.init();
     }
@@ -380,6 +398,11 @@ class Game3DSimple {
             if (e.code === 'KeyR' && this.gameOver) {
                 this.restart();
             }
+            
+            // Pause on Escape or Space
+            if ((e.code === 'Escape' || e.code === 'Space') && !this.gameOver) {
+                this.togglePause();
+            }
         });
         
         document.addEventListener('keyup', (e) => {
@@ -417,6 +440,60 @@ class Game3DSimple {
             });
         }
         
+        // Touch controls (swipe)
+        document.addEventListener('touchstart', (e) => {
+            this.touchStartX = e.touches[0].clientX;
+            this.touchStartY = e.touches[0].clientY;
+            this.touchStartTime = Date.now();
+            this.isSwiping = false;
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!this.touchStartX || !this.touchStartY) return;
+            
+            this.isSwiping = true;
+            
+            const touchCurrentX = e.touches[0].clientX;
+            const touchCurrentY = e.touches[0].clientY;
+            
+            const deltaX = touchCurrentX - this.touchStartX;
+            const deltaY = touchCurrentY - this.touchStartY;
+            
+            // Continuous movement based on swipe
+            const sensitivity = 0.01;
+            
+            // Horizontal movement (X axis)
+            if (Math.abs(deltaX) > 10) {
+                this.player.position.x += deltaX * sensitivity;
+                
+                // Keep in bounds
+                const maxX = 3;
+                this.player.position.x = Math.max(-maxX, Math.min(maxX, this.player.position.x));
+            }
+            
+            // Vertical movement (Z axis)
+            if (Math.abs(deltaY) > 10) {
+                this.player.position.z += deltaY * sensitivity;
+                
+                // Keep in bounds
+                const maxZ = 5;
+                this.player.position.z = Math.max(-maxZ, Math.min(maxZ, this.player.position.z));
+            }
+            
+            // Update start position for continuous movement
+            this.touchStartX = touchCurrentX;
+            this.touchStartY = touchCurrentY;
+            
+            // Prevent scrolling
+            e.preventDefault();
+        }, { passive: false });
+        
+        document.addEventListener('touchend', (e) => {
+            this.touchStartX = 0;
+            this.touchStartY = 0;
+            this.isSwiping = false;
+        });
+        
         // Window resize
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -438,15 +515,23 @@ class Game3DSimple {
     }
     
     gameLoop() {
-        if (!this.gameOver) {
+        if (!this.gameOver && !this.isPaused) {
             // Update player movement
             this.updatePlayer();
             
             // Update obstacles (they move up towards player)
             this.updateObstacles();
             
-            // Check collisions (DISABLED for now)
-            // this.checkCollisions();
+            // Check collisions (ENABLED!)
+            this.checkCollisions();
+            
+            // Check if power-up expired
+            if (this.activePowerUp && Date.now() > this.powerUpEndTime) {
+                this.deactivatePowerUp();
+            }
+            
+            // Update difficulty over time
+            this.updateDifficulty();
             
             // Update camera to follow player
             this.updateCamera();
@@ -472,10 +557,21 @@ class Game3DSimple {
                     <div style="font-size: 16px;">Best: ${this.bestScore}m</div>
                     <div style="font-size: 14px; margin-top: 10px; opacity: 0.8;">Press R to restart</div>
                 `;
+            } else if (this.isPaused) {
+                coordsDiv.innerHTML = `
+                    <div style="font-size: 24px; color: #ffaa00; font-weight: bold;">⏸ PAUSED</div>
+                    <div style="font-size: 18px; margin-top: 10px;">Score: ${this.score}m</div>
+                    <div style="font-size: 14px; margin-top: 10px; opacity: 0.8;">Press SPACE or ESC to resume</div>
+                `;
             } else {
+                const difficultyLevel = Math.floor((this.currentSpawnRate - this.baseSpawnRate) / 0.008) + 1;
+                const activePowerUpText = this.activePowerUp ? `<div style="font-size: 14px; color: #00ff00;">⚡ ${this.activePowerUp.toUpperCase()}</div>` : '';
+                
                 coordsDiv.innerHTML = `
                     <div>BALL: X=${this.player.position.x.toFixed(2)} Y=${this.player.position.y.toFixed(2)} Z=${this.player.position.z.toFixed(2)}</div>
                     <div style="font-size: 20px; font-weight: bold; margin-top: 5px;">Score: ${this.score}m</div>
+                    <div style="font-size: 14px; opacity: 0.7;">Level: ${difficultyLevel}</div>
+                    ${activePowerUpText}
                 `;
             }
         }
@@ -491,6 +587,7 @@ class Game3DSimple {
         
         const ballRadius = 0.4; // Player ball radius
         
+        // Check OBSTACLE collisions (detect but don't do anything yet)
         this.obstacles.forEach(obstacle => {
             // First check: Is obstacle at same HEIGHT (Y) as ball?
             const dy = Math.abs(this.player.position.y - obstacle.position.y);
@@ -505,12 +602,84 @@ class Game3DSimple {
                 // Estimate obstacle radius (use scale as approximation)
                 const obstacleRadius = obstacle.scale.x * 0.6; // Slightly smaller for better feel
                 
-                // Collision if horizontal distance less than sum of radii
+                // Collision detected but NO EFFECT (no game over, no red ball)
                 if (horizontalDistance < ballRadius + obstacleRadius) {
-                    this.triggerGameOver();
+                    console.log('Obstacle collision detected (no effect yet)');
                 }
             }
         });
+        
+        // Check POWER-UP collisions (collect them!)
+        this.powerUps.forEach((powerUp, index) => {
+            // First check: Is power-up at same HEIGHT (Y) as ball?
+            const dy = Math.abs(this.player.position.y - powerUp.mesh.position.y);
+            
+            // Only check collision if power-up is at roughly same height (within 1 unit)
+            if (dy < 1.0) {
+                // Calculate horizontal distance (X and Z only)
+                const dx = this.player.position.x - powerUp.mesh.position.x;
+                const dz = this.player.position.z - powerUp.mesh.position.z;
+                const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+                
+                // Power-up radius (aura size)
+                const powerUpRadius = 0.6; // Size of aura
+                
+                // Collision if horizontal distance less than sum of radii
+                if (horizontalDistance < ballRadius + powerUpRadius) {
+                    this.collectPowerUp(powerUp);
+                    
+                    // Remove power-up from scene and array
+                    this.scene.remove(powerUp.mesh);
+                    if (powerUp.aura) this.scene.remove(powerUp.aura);
+                    this.powerUps.splice(index, 1);
+                }
+            }
+        });
+    }
+    
+    collectPowerUp(powerUp) {
+        console.log('Power-up collected:', powerUp.type);
+        
+        // Activate power-up effect
+        this.activePowerUp = powerUp.type;
+        this.powerUpEndTime = Date.now() + 5000; // 5 seconds duration
+        
+        // Apply immediate effects based on type
+        switch(powerUp.type) {
+            case 'slowmo':
+                // Slow down fall speed
+                this.fallSpeed = this.fallSpeed * 0.5; // Half current speed
+                console.log('Slow motion activated!');
+                break;
+            case 'shield':
+                // Give shield (visual indicator)
+                console.log('Shield activated!');
+                break;
+            case 'bonus':
+                // Give bonus points
+                this.score += 50;
+                console.log('Bonus +50 points!');
+                break;
+        }
+    }
+    
+    deactivatePowerUp() {
+        console.log('Power-up expired:', this.activePowerUp);
+        
+        // Revert effects based on type
+        switch(this.activePowerUp) {
+            case 'slowmo':
+                // Reset fall speed to current difficulty level
+                this.fallSpeed = Math.min(this.baseFallSpeed + (this.currentSpawnRate - this.baseSpawnRate) * 0.8, 0.10);
+                console.log('Slow motion deactivated');
+                break;
+            case 'shield':
+                console.log('Shield deactivated');
+                break;
+        }
+        
+        this.activePowerUp = null;
+        this.powerUpEndTime = 0;
     }
     
     triggerGameOver() {
@@ -531,12 +700,48 @@ class Game3DSimple {
         this.player.material.emissive.setHex(0x440000);
     }
     
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        console.log(this.isPaused ? 'Game paused' : 'Game resumed');
+    }
+    
+    updateDifficulty() {
+        // Increase difficulty every 15 seconds (amateur: 1min30, pro: 4-5min)
+        const currentTime = Date.now();
+        const timeSinceLastIncrease = currentTime - this.lastDifficultyIncrease;
+        
+        if (timeSinceLastIncrease >= this.difficultyIncreaseInterval) {
+            // Increase spawn rate (more obstacles)
+            this.currentSpawnRate = Math.min(this.currentSpawnRate + 0.008, 0.12); // Cap at 0.12 for pro players
+            
+            // Increase fall speed (faster game)
+            if (!this.activePowerUp || this.activePowerUp !== 'slowmo') {
+                this.fallSpeed = Math.min(this.baseFallSpeed + (this.currentSpawnRate - this.baseSpawnRate) * 0.8, 0.10); // Cap at 0.10 for pro
+            }
+            
+            this.lastDifficultyIncrease = currentTime;
+            
+            const level = Math.floor((this.currentSpawnRate - this.baseSpawnRate) / 0.008) + 1;
+            console.log(`Difficulty increased! Level ${level} - Spawn rate: ${this.currentSpawnRate.toFixed(3)}, Fall speed: ${this.fallSpeed.toFixed(3)}`);
+        }
+    }
+    
     restart() {
         console.log('Restarting game...');
         
         // Reset game state
         this.gameOver = false;
+        this.isPaused = false;
         this.score = 0;
+        
+        // Reset difficulty
+        this.currentSpawnRate = this.baseSpawnRate;
+        this.fallSpeed = this.baseFallSpeed;
+        this.lastDifficultyIncrease = Date.now();
+        
+        // Reset power-ups
+        this.activePowerUp = null;
+        this.powerUpEndTime = 0;
         
         // Reset player position
         this.player.position.set(0, 0, 0);
@@ -548,6 +753,13 @@ class Game3DSimple {
         // Clear obstacles
         this.obstacles.forEach(obstacle => this.scene.remove(obstacle));
         this.obstacles = [];
+        
+        // Clear power-ups
+        this.powerUps.forEach(powerUp => {
+            this.scene.remove(powerUp.mesh);
+            if (powerUp.aura) this.scene.remove(powerUp.aura);
+        });
+        this.powerUps = [];
     }
     
     updatePlayer() {
@@ -646,17 +858,38 @@ class Game3DSimple {
     }
     
     updateObstacles() {
-        // Spawn obstacles randomly below the player (very frequent)
-        if (Math.random() < 0.05) {
-            this.spawnObstacle();
+        // Spawn obstacles AND power-ups randomly below the player (with progressive difficulty)
+        if (Math.random() < this.currentSpawnRate) {
+            // 70% obstacles, 30% power-ups
+            if (Math.random() < 0.7) {
+                this.spawnObstacle();
+            } else {
+                this.spawnPowerUp();
+            }
         }
         
-        // Obstacles stay in place (static)
+        // Update obstacles (static)
         this.obstacles.forEach((obstacle, index) => {
             // Remove obstacles that the ball has passed (above the ball)
             if (obstacle.position.y > this.player.position.y + 5) {
                 this.scene.remove(obstacle);
                 this.obstacles.splice(index, 1);
+            }
+        });
+        
+        // Update power-ups (static + pulse aura)
+        this.powerUps.forEach((powerUp, index) => {
+            // Pulse the aura
+            if (powerUp.aura) {
+                const pulseScale = 1.2 + Math.sin(Date.now() * 0.005) * 0.3;
+                powerUp.aura.scale.set(pulseScale, pulseScale, pulseScale);
+            }
+            
+            // Remove power-ups that the ball has passed
+            if (powerUp.mesh.position.y > this.player.position.y + 5) {
+                this.scene.remove(powerUp.mesh);
+                if (powerUp.aura) this.scene.remove(powerUp.aura);
+                this.powerUps.splice(index, 1);
             }
         });
     }
@@ -704,6 +937,56 @@ class Game3DSimple {
         this.scene.add(obstacle);
         
         console.log('Obstacle spawned at X:', randomX.toFixed(2), 'Z:', randomZ.toFixed(2));
+    }
+    
+    spawnPowerUp() {
+        // Power-up types
+        const powerUpTypes = [
+            { type: 'slowmo', color: 0xffff00, auraColor: 0xffff00 }, // Yellow
+            { type: 'shield', color: 0x00ff00, auraColor: 0x00ff88 },  // Green
+            { type: 'bonus', color: 0xff00ff, auraColor: 0xff00ff }    // Magenta
+        ];
+        
+        const powerUpData = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+        
+        // Create power-up mesh (small diamond/octahedron)
+        const geometry = new THREE.OctahedronGeometry(0.3, 0);
+        const material = new THREE.MeshLambertMaterial({ 
+            color: powerUpData.color,
+            emissive: powerUpData.color,
+            emissiveIntensity: 0.5
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        
+        // Create AURA (glowing sphere around it)
+        const auraGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+        const auraMaterial = new THREE.MeshBasicMaterial({ 
+            color: powerUpData.auraColor,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.BackSide // Render inside-out for glow effect
+        });
+        const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+        
+        // Random position (same as obstacles)
+        const randomX = Math.random() * 10 - 5;
+        const randomZ = Math.random() * 14 - 7;
+        const yPos = this.player.position.y - 8 - Math.random() * 8;
+        
+        mesh.position.set(randomX, yPos, randomZ);
+        aura.position.set(randomX, yPos, randomZ);
+        
+        // Store power-up with its aura
+        this.powerUps.push({
+            mesh: mesh,
+            aura: aura,
+            type: powerUpData.type
+        });
+        
+        this.scene.add(mesh);
+        this.scene.add(aura);
+        
+        console.log('Power-up spawned:', powerUpData.type, 'at X:', randomX.toFixed(2), 'Z:', randomZ.toFixed(2));
     }
     
 }
