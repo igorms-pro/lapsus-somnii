@@ -59,6 +59,10 @@
         </svg>
         
         <canvas id="gameCanvas" style="position: relative; z-index: 2;"></canvas>
+        <div id="sideViewContainer" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999;">
+            <button id="sideViewToggle" style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: rgba(0,0,0,0.7); border: 2px solid rgba(255,255,255,0.6); border-radius: 50%; color: white; font-size: 16px; cursor: pointer; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 0;">−</button>
+            <canvas id="sideViewCanvas" style="width: 120px; height: 180px; border: 2px solid rgba(255,255,255,0.6); border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.5); background: #000000; display: block; transition: all 0.3s ease;"></canvas>
+        </div>
         <div id="gameZone"></div>
         <div id="ballCoords" style="position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; z-index: 10;">
             BALL: X=0.00 Y=0.00 Z=0.00

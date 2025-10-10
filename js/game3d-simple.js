@@ -25,6 +25,11 @@ class Game3DSimple {
         this.tunnelActive = true; // Keep tunnel active
         this.obstaclesInTunnel = true; // Spawn obstacles in tunnel
         
+        // Game state
+        this.gameOver = false;
+        this.score = 0;
+        this.bestScore = localStorage.getItem('bestScore') || 0;
+        
         this.init();
     }
     
@@ -87,13 +92,39 @@ class Game3DSimple {
         this.camera.position.set(0, 8, 0); // Closer for mobile (8 instead of 10)
         this.camera.lookAt(0, 0, 0); // Look down at player
         
-        // 3. Renderer
+        // 3. Main Renderer
         this.renderer = new THREE.WebGLRenderer({ 
             canvas: document.getElementById('gameCanvas'),
             antialias: true,
             alpha: true // Transparent canvas to show SVG background
         });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // 4. Side View Camera (lateral view)
+        this.sideCamera = new THREE.PerspectiveCamera(
+            60, // FOV
+            120 / 180, // Aspect ratio (120x180 canvas)
+            0.1,
+            1000
+        );
+        this.sideCamera.position.set(10, 0, 0); // Camera to the side (X=10)
+        this.sideCamera.lookAt(0, 0, 0);
+        
+        // 5. Side View Renderer (check if canvas exists)
+        const sideCanvas = document.getElementById('sideViewCanvas');
+        if (sideCanvas) {
+            this.sideRenderer = new THREE.WebGLRenderer({
+                canvas: sideCanvas,
+                antialias: true,
+                alpha: false // NOT transparent - we want to see it!
+            });
+            this.sideRenderer.setSize(120, 180);
+            this.sideRenderer.setClearColor(0x001122, 1); // Dark blue background
+            console.log('Side view renderer created! Canvas:', sideCanvas.width, 'x', sideCanvas.height);
+        } else {
+            console.warn('Side view canvas not found');
+            this.sideRenderer = null;
+        }
         
         // 4. Realistic lighting
         const ambientLight = new THREE.AmbientLight(0x87CEEB, 0.4); // Sky blue ambient
@@ -344,11 +375,47 @@ class Game3DSimple {
         // Keyboard input
         document.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
+            
+            // Restart on R key
+            if (e.code === 'KeyR' && this.gameOver) {
+                this.restart();
+            }
         });
         
         document.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
         });
+        
+        // Side view toggle
+        const toggleBtn = document.getElementById('sideViewToggle');
+        const sideCanvas = document.getElementById('sideViewCanvas');
+        const container = document.getElementById('sideViewContainer');
+        let isCollapsed = false;
+        
+        if (toggleBtn && sideCanvas && container) {
+            toggleBtn.addEventListener('click', () => {
+                isCollapsed = !isCollapsed;
+                if (isCollapsed) {
+                    sideCanvas.style.width = '0px';
+                    sideCanvas.style.height = '0px';
+                    sideCanvas.style.border = 'none';
+                    sideCanvas.style.opacity = '0';
+                    toggleBtn.textContent = '+';
+                    toggleBtn.style.position = 'relative';
+                    toggleBtn.style.top = '0';
+                    toggleBtn.style.right = '0';
+                } else {
+                    sideCanvas.style.width = '120px';
+                    sideCanvas.style.height = '180px';
+                    sideCanvas.style.border = '2px solid rgba(255,255,255,0.6)';
+                    sideCanvas.style.opacity = '1';
+                    toggleBtn.textContent = '−';
+                    toggleBtn.style.position = 'absolute';
+                    toggleBtn.style.top = '5px';
+                    toggleBtn.style.right = '5px';
+                }
+            });
+        }
         
         // Window resize
         window.addEventListener('resize', () => {
@@ -359,18 +426,34 @@ class Game3DSimple {
     }
     
     render() {
+        // Render main view (top-down)
         this.renderer.render(this.scene, this.camera);
+        
+        // Render side view (lateral) - only if renderer exists
+        if (this.sideRenderer && this.sideCamera) {
+            this.sideRenderer.clear();
+            this.sideRenderer.render(this.scene, this.sideCamera);
+            // console.log('Side view rendered'); // Debug
+        }
     }
     
     gameLoop() {
-        // Update player movement
-        this.updatePlayer();
-        
-        // Update obstacles (they move up towards player)
-        this.updateObstacles();
-        
-        // Update camera to follow player
-        this.updateCamera();
+        if (!this.gameOver) {
+            // Update player movement
+            this.updatePlayer();
+            
+            // Update obstacles (they move up towards player)
+            this.updateObstacles();
+            
+            // Check collisions (DISABLED for now)
+            // this.checkCollisions();
+            
+            // Update camera to follow player
+            this.updateCamera();
+            
+            // Update score (distance fallen)
+            this.updateScore();
+        }
         
         // Update ball coordinates display
         this.updateBallDisplay();
@@ -382,8 +465,89 @@ class Game3DSimple {
     updateBallDisplay() {
         const coordsDiv = document.getElementById('ballCoords');
         if (coordsDiv && this.player) {
-            coordsDiv.textContent = `BALL: X=${this.player.position.x.toFixed(2)} Y=${this.player.position.y.toFixed(2)} Z=${this.player.position.z.toFixed(2)}`;
+            if (this.gameOver) {
+                coordsDiv.innerHTML = `
+                    <div style="font-size: 24px; color: #ff4444; font-weight: bold;">GAME OVER!</div>
+                    <div style="font-size: 18px; margin-top: 10px;">Score: ${this.score}m</div>
+                    <div style="font-size: 16px;">Best: ${this.bestScore}m</div>
+                    <div style="font-size: 14px; margin-top: 10px; opacity: 0.8;">Press R to restart</div>
+                `;
+            } else {
+                coordsDiv.innerHTML = `
+                    <div>BALL: X=${this.player.position.x.toFixed(2)} Y=${this.player.position.y.toFixed(2)} Z=${this.player.position.z.toFixed(2)}</div>
+                    <div style="font-size: 20px; font-weight: bold; margin-top: 5px;">Score: ${this.score}m</div>
+                `;
+            }
         }
+    }
+    
+    updateScore() {
+        // Score = distance fallen (absolute value of Y)
+        this.score = Math.floor(Math.abs(this.player.position.y));
+    }
+    
+    checkCollisions() {
+        if (!this.player) return;
+        
+        const ballRadius = 0.4; // Player ball radius
+        
+        this.obstacles.forEach(obstacle => {
+            // First check: Is obstacle at same HEIGHT (Y) as ball?
+            const dy = Math.abs(this.player.position.y - obstacle.position.y);
+            
+            // Only check collision if obstacle is at roughly same height (within 1 unit)
+            if (dy < 1.0) {
+                // Calculate horizontal distance (X and Z only)
+                const dx = this.player.position.x - obstacle.position.x;
+                const dz = this.player.position.z - obstacle.position.z;
+                const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+                
+                // Estimate obstacle radius (use scale as approximation)
+                const obstacleRadius = obstacle.scale.x * 0.6; // Slightly smaller for better feel
+                
+                // Collision if horizontal distance less than sum of radii
+                if (horizontalDistance < ballRadius + obstacleRadius) {
+                    this.triggerGameOver();
+                }
+            }
+        });
+    }
+    
+    triggerGameOver() {
+        if (this.gameOver) return; // Already game over
+        
+        this.gameOver = true;
+        console.log('GAME OVER! Score:', this.score);
+        
+        // Update best score
+        if (this.score > this.bestScore) {
+            this.bestScore = this.score;
+            localStorage.setItem('bestScore', this.bestScore);
+            console.log('NEW BEST SCORE!', this.bestScore);
+        }
+        
+        // Change ball color to red
+        this.player.material.color.setHex(0xff0000);
+        this.player.material.emissive.setHex(0x440000);
+    }
+    
+    restart() {
+        console.log('Restarting game...');
+        
+        // Reset game state
+        this.gameOver = false;
+        this.score = 0;
+        
+        // Reset player position
+        this.player.position.set(0, 0, 0);
+        
+        // Reset player color
+        this.player.material.color.setHex(0xffd700);
+        this.player.material.emissive.setHex(0x444400);
+        
+        // Clear obstacles
+        this.obstacles.forEach(obstacle => this.scene.remove(obstacle));
+        this.obstacles = [];
     }
     
     updatePlayer() {
@@ -420,11 +584,19 @@ class Game3DSimple {
     }
     
     updateCamera() {
-        // Camera FOLLOWS player (mobile optimized)
+        // Main camera FOLLOWS player (mobile optimized - top-down view)
         this.camera.position.x = this.player.position.x; // Follow X
         this.camera.position.y = this.player.position.y + 8; // 8 units above player (closer for mobile)
         this.camera.position.z = this.player.position.z; // Follow Z
         this.camera.lookAt(this.player.position); // Always look at player
+        
+        // Side camera FOLLOWS player (lateral view - from the side)
+        if (this.sideCamera) {
+            this.sideCamera.position.x = 10; // Fixed to the side
+            this.sideCamera.position.y = this.player.position.y; // Same height as player
+            this.sideCamera.position.z = this.player.position.z; // Follow Z
+            this.sideCamera.lookAt(this.player.position); // Look at player
+        }
     }
     
     updateLandscape() {
