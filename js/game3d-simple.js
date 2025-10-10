@@ -16,7 +16,9 @@ class Game3DSimple {
         // Game state
         this.obstacles = [];
         this.tunnelSegments = []; // Store tunnel segments for movement
-        this.speed = 0.05; // Speed of tunnel movement
+        this.speed = 0.005; // Speed of tunnel movement
+        this.startTime = null; // Start time for fall duration
+        this.maxFallSeconds = 30; // Stop after 30s
         
         this.init();
     }
@@ -26,6 +28,7 @@ class Game3DSimple {
         this.createTunnel();
         this.createPlayer();
         this.setupEventListeners();
+        this.startTime = performance.now();
         this.gameLoop();
     }
     
@@ -58,107 +61,123 @@ class Game3DSimple {
     }
     
     createTunnel() {
-        // Create tunnel segments with perspective effect
-        // Each segment gets smaller as it goes deeper
+        // Create multiple tunnel sections that follow each other
+        // Each tunnel section is 100 units long, with 300 units gap between them
         
-        for (let i = 0; i < 20; i++) {
-            const depth = i * 2; // Distance from camera
-            const scale = 1 - (depth * 0.05); // Scale decreases with distance
-            const radius = 4 * scale; // Radius gets smaller
-            const segmentLength = 2;
+        const tunnelColors = [
+            0x8B0000, // Dark Red
+            0x006400, // Dark Green  
+            0x000080, // Dark Blue
+            0x4B0082, // Dark Violet
+            0x8B4513  // Saddle Brown
+        ];
+        
+        for (let tunnelIndex = 0; tunnelIndex < 5; tunnelIndex++) {
+            const tunnelStart = tunnelIndex * 120; // 100 tunnel + 20 gap = 120 total
             
-            if (scale <= 0.1) continue; // Stop when too small
-            
-            // Create tunnel ring
-            const ringGeometry = new THREE.CylinderGeometry(radius, radius, segmentLength, 16, 1, true);
-            const ringMaterial = new THREE.MeshLambertMaterial({
-                color: 0x8B0000, // Dark Red
-                side: THREE.BackSide, // Inside of cylinder
-                transparent: true,
-                opacity: 0.8 - (depth * 0.02) // Fade with distance
-            });
-            
-            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-            ring.position.set(0, 0, -depth);
-            ring.rotation.x = Math.PI / 2;
-            this.scene.add(ring);
-            
-            // Store segment for movement
-            this.tunnelSegments.push({
-                mesh: ring,
-                originalDepth: depth,
-                scale: scale,
-                radius: radius
-            });
-            
-            // Add texture details to each ring
-            for (let j = 0; j < 8; j++) {
-                const angle = (j * Math.PI * 2) / 8;
-                const detailGeometry = new THREE.BoxGeometry(0.1 * scale, 0.1 * scale, segmentLength);
-                const detailMaterial = new THREE.MeshLambertMaterial({ 
-                    color: 0x4B0000, // Darker Red for details
+            // Create tunnel segments for this section
+            for (let i = 0; i < 50; i++) {
+                const depth = tunnelStart + (i * 2); // Distance from camera
+                const scale = 1 - ((depth % 100) * 0.01); // Scale resets for each tunnel
+                const radius = 4 * scale; // Radius gets smaller
+                const segmentLength = 2;
+                
+                if (scale <= 0.1) continue; // Stop when too small
+                
+                // Create tunnel ring
+                const ringGeometry = new THREE.CylinderGeometry(radius, radius, segmentLength, 16, 1, true);
+                const ringMaterial = new THREE.MeshLambertMaterial({
+                    color: tunnelColors[tunnelIndex % tunnelColors.length], // Different color per tunnel
+                    side: THREE.BackSide, // Inside of cylinder
                     transparent: true,
-                    opacity: 0.6 - (depth * 0.02)
+                    opacity: 0.8 - ((depth % 100) * 0.02) // Fade with distance within tunnel
                 });
-                const detail = new THREE.Mesh(detailGeometry, detailMaterial);
                 
-                detail.position.x = Math.cos(angle) * (radius + 0.1);
-                detail.position.y = Math.sin(angle) * (radius + 0.1);
-                detail.position.z = -depth;
-                detail.rotation.z = angle;
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.position.set(0, 0, -depth);
+                ring.rotation.x = Math.PI / 2;
+                this.scene.add(ring);
                 
-                this.scene.add(detail);
-                
-                // Store detail for movement too
+                // Store segment for movement
                 this.tunnelSegments.push({
-                    mesh: detail,
+                    mesh: ring,
                     originalDepth: depth,
                     scale: scale,
-                    radius: radius
+                    radius: radius,
+                    tunnelIndex: tunnelIndex
                 });
+                
+                // Add texture details to each ring
+                for (let j = 0; j < 8; j++) {
+                    const angle = (j * Math.PI * 2) / 8;
+                    const detailGeometry = new THREE.BoxGeometry(0.1 * scale, 0.1 * scale, segmentLength);
+                    const detailMaterial = new THREE.MeshLambertMaterial({ 
+                        color: tunnelColors[tunnelIndex % tunnelColors.length] - 0x222222, // Darker version
+                        transparent: true,
+                        opacity: 0.6 - ((depth % 100) * 0.02)
+                    });
+                    const detail = new THREE.Mesh(detailGeometry, detailMaterial);
+                    
+                    detail.position.x = Math.cos(angle) * (radius + 0.1);
+                    detail.position.y = Math.sin(angle) * (radius + 0.1);
+                    detail.position.z = -depth;
+                    detail.rotation.z = angle;
+                    
+                    this.scene.add(detail);
+                    
+                    // Store detail for movement too
+                    this.tunnelSegments.push({
+                        mesh: detail,
+                        originalDepth: depth,
+                        scale: scale,
+                        radius: radius,
+                        tunnelIndex: tunnelIndex
+                    });
+                }
             }
+            
+            // Add point of light at the end of each tunnel
+            const pointLight = new THREE.PointLight(0x00ffff, 1, 200);
+            pointLight.position.set(0, 0, -(tunnelStart + 100));
+            this.scene.add(pointLight);
+            
+            // Add glowing target at the end of each tunnel
+            const targetGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
+            const targetMaterial = new THREE.MeshLambertMaterial({
+                color: 0xffffff, // White
+                emissive: 0x444444
+            });
+            const target = new THREE.Mesh(targetGeometry, targetMaterial);
+            target.position.set(0, 0, -(tunnelStart + 100));
+            target.rotation.x = Math.PI / 2;
+            this.scene.add(target);
+            
+            // Store target for movement
+            this.tunnelSegments.push({
+                mesh: target,
+                originalDepth: tunnelStart + 100,
+                scale: 1,
+                radius: 0.2,
+                tunnelIndex: tunnelIndex
+            });
         }
         
-        // Add point of light at the end (vanishing point)
-        const pointLight = new THREE.PointLight(0x00ffff, 1, 50);
-        pointLight.position.set(0, 0, -40);
-        this.scene.add(pointLight);
-        
-        // Add glowing target at the end
-        const targetGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
-        const targetMaterial = new THREE.MeshLambertMaterial({
-            color: 0x00ffff,
-            emissive: 0x004444
-        });
-        const target = new THREE.Mesh(targetGeometry, targetMaterial);
-        target.position.set(0, 0, -40);
-        target.rotation.x = Math.PI / 2;
-        this.scene.add(target);
-        
-        // Store target for movement
-        this.tunnelSegments.push({
-            mesh: target,
-            originalDepth: 40,
-            scale: 1,
-            radius: 0.2
-        });
-        
-        console.log('Tunnel with perspective created!');
+        console.log('Multiple tunnels created!');
     }
     
     createPlayer() {
         // Create player - golden sphere
-        const geometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const geometry = new THREE.SphereGeometry(0.5, 16, 16); // Bigger sphere
         const material = new THREE.MeshLambertMaterial({ 
             color: 0xffd700,
             emissive: 0x444400 // Slight glow
         });
         
         this.player = new THREE.Mesh(geometry, material);
-        this.player.position.set(0, 0, 0);
+        this.player.position.set(0, 0, 0); // Player at center
         this.scene.add(this.player);
         
-        console.log('Player created!');
+        console.log('Player created at position:', this.player.position);
     }
     
     setupEventListeners() {
@@ -216,6 +235,7 @@ class Game3DSimple {
         // Keep player in bounds (tunnel walls)
         this.player.position.x = Math.max(-3, Math.min(3, this.player.position.x));
         this.player.position.y = Math.max(-3, Math.min(3, this.player.position.y));
+        this.player.position.z = Math.max(1, Math.min(3, this.player.position.z)); // Keep Z in visible range
         
         // Slight rotation for visual feedback
         this.player.rotation.x += 0.01;
@@ -223,14 +243,31 @@ class Game3DSimple {
     }
     
     updateTunnel() {
+        // Stop movement after maxFallSeconds
+        if (this.startTime) {
+            const elapsedSec = (performance.now() - this.startTime) / 1000;
+            if (elapsedSec >= this.maxFallSeconds) {
+                return; // Freeze decor
+            }
+        }
+
         // Move tunnel segments towards player (create falling effect)
         this.tunnelSegments.forEach(segment => {
             // Move segment towards player
             segment.mesh.position.z += this.speed;
             
-            // When segment passes player, reset it to the back
+            // When segment passes player, reset it to the back seamlessly
             if (segment.mesh.position.z > 5) {
-                segment.mesh.position.z = -40; // Reset to back
+                // Find the furthest segment to place this one right after it
+                let furthestZ = -2000; // Much further back
+                this.tunnelSegments.forEach(otherSegment => {
+                    if (otherSegment.mesh.position.z < furthestZ) {
+                        furthestZ = otherSegment.mesh.position.z;
+                    }
+                });
+                
+                // Place this segment right after the furthest one
+                segment.mesh.position.z = furthestZ - 2; // 2 units spacing
             }
         });
         
