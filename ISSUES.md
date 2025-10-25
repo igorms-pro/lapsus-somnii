@@ -15,7 +15,7 @@
 ## 🚀 **NEXT PHASES**
 
 ### **ISSUE 0: AUDIO IMPLEMENTATION** 🎵
-**Priority: HIGH**
+**Priority: LOW** (Maybe later)
 - [ ] **Generate Music with Suno AI**
   - [ ] Create 40 unique tracks (8 characters × 5 worlds)
   - [ ] Test audio quality and cultural accuracy
@@ -41,8 +41,10 @@
   - [x] Boss battles
 
 ### **ISSUE 2: VISUAL ENHANCEMENTS** 🎨
-**Priority: MEDIUM**
+**Priority: HIGH** (React Native + Three.js)
 - [ ] **3D Graphics**
+  - [ ] Set up React Native + Expo + Three.js
+  - [ ] Migrate HTML/JS game to React Native
   - [ ] Character 3D models
   - [ ] Environmental 3D assets
   - [ ] Particle effects
