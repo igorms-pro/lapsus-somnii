@@ -1,0 +1,29 @@
+{
+  "name": "lapsus-somnii",
+  "version": "1.0.0",
+  "description": "![Lapsus Somnii](https://img.shields.io/badge/Status-En%20Développement-gold) ![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white) ![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)",
+  "main": "sw.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/igorms-pro/lapsus-somnii.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/igorms-pro/lapsus-somnii/issues"
+  },
+  "homepage": "https://github.com/igorms-pro/lapsus-somnii#readme",
+  "dependencies": {
+    "expo": "^54.0.20",
+    "expo-gl": "^16.0.7",
+    "expo-three": "^8.0.0",
+    "three": "^0.180.0"
+  }
+}
