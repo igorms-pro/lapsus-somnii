@@ -27,13 +27,13 @@ const GameCanvas = ({ style }) => {
     // Start game
     gameEngine.startGame();
     
-    // Game loop
+    // Game loop - ALWAYS running
     const animate = (currentTime) => {
       if (gameEngineRef.current) {
-        if (isPlaying && !isPaused && !gameOver) {
-          gameEngineRef.current.update(currentTime);
-        }
+        // Update game engine
+        gameEngineRef.current.update(currentTime);
         
+        // Continue animation loop
         animationFrameRef.current = requestAnimationFrame(animate);
       }
     };
@@ -56,7 +56,7 @@ const GameCanvas = ({ style }) => {
   
   // Handle input
   const handleTouch = (event) => {
-    if (!gameEngineRef.current || !isPlaying) return;
+    if (!gameEngineRef.current) return;
     
     const { locationX, locationY } = event.nativeEvent;
     const centerX = style.width / 2;
@@ -69,7 +69,7 @@ const GameCanvas = ({ style }) => {
   };
   
   const handleTouchEnd = () => {
-    if (!gameEngineRef.current || !isPlaying) return;
+    if (!gameEngineRef.current) return;
     gameEngineRef.current.handleInput('jump');
   };
   

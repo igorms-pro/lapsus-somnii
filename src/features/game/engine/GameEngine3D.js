@@ -128,6 +128,8 @@ export class GameEngine3D {
     // Clear existing objects
     this.clearObstacles();
     this.clearParticles();
+    
+    console.log('Game started!');
   }
   
   pauseGame() {
@@ -189,7 +191,11 @@ export class GameEngine3D {
   
   updateParticles() {
     this.particles.forEach((particle, index) => {
-      particle.update(this.deltaTime);
+      // Update particle position
+      particle.position.add(particle.velocity.clone().multiplyScalar(this.deltaTime));
+      
+      // Update particle life
+      particle.life -= this.deltaTime * 1000; // Convert to milliseconds
       
       // Remove dead particles
       if (particle.life <= 0) {
@@ -243,6 +249,8 @@ export class GameEngine3D {
       const obstacle = new Obstacle3D(x, y, z, type);
       this.obstacles.push(obstacle);
       this.scene.add(obstacle.mesh);
+      
+      console.log('Spawned obstacle:', type, 'at', x, y, z);
     }
   }
   
@@ -271,21 +279,23 @@ export class GameEngine3D {
     if (!this.player) return;
     
     // Check obstacle collisions
-    this.obstacles.forEach((obstacle) => {
+    this.obstacles.forEach((obstacle, index) => {
       if (obstacle.checkCollision(this.player)) {
-        this.handleCollision(obstacle);
+        console.log('Collision detected with obstacle:', obstacle.type);
+        this.handleCollision(obstacle, index);
       }
     });
     
     // Check power-up collisions
     this.powerUps.forEach((powerUp, index) => {
       if (powerUp.checkCollision(this.player)) {
+        console.log('Power-up collected:', powerUp.type);
         this.handlePowerUp(powerUp, index);
       }
     });
   }
   
-  handleCollision(obstacle) {
+  handleCollision(obstacle, index) {
     // Player takes damage
     this.player.takeDamage(1);
     
@@ -296,7 +306,7 @@ export class GameEngine3D {
     this.addCameraShake(5);
     
     // Remove obstacle
-    this.removeObstacle(this.obstacles.indexOf(obstacle));
+    this.removeObstacle(index);
   }
   
   handlePowerUp(powerUp, index) {
@@ -323,17 +333,20 @@ export class GameEngine3D {
   
   // Input handling
   handleInput(direction) {
-    if (!this.player || this.state !== 'playing') return;
+    if (!this.player) return;
     
     switch (direction) {
       case 'left':
         this.player.moveLeft(this.deltaTime);
+        console.log('Player moving left');
         break;
       case 'right':
         this.player.moveRight(this.deltaTime);
+        console.log('Player moving right');
         break;
       case 'jump':
         this.player.jump();
+        console.log('Player jumping');
         break;
     }
   }
